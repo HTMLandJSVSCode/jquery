@@ -1,13 +1,9 @@
-define( [
-	"../core",
-	"../core/stripAndCollapse",
-	"../var/isFunction",
-	"../var/rnothtmlwhite",
-	"../data/var/dataPriv",
-	"../core/init"
-], function( jQuery, stripAndCollapse, isFunction, rnothtmlwhite, dataPriv ) {
+import jQuery from "../core.js";
+import stripAndCollapse from "../core/stripAndCollapse.js";
+import rnothtmlwhite from "../var/rnothtmlwhite.js";
+import dataPriv from "../data/var/dataPriv.js";
 
-"use strict";
+import "../core/init.js";
 
 function getClass( elem ) {
 	return elem.getAttribute && elem.getAttribute( "class" ) || "";
@@ -28,7 +24,7 @@ jQuery.fn.extend( {
 		var classes, elem, cur, curValue, clazz, j, finalValue,
 			i = 0;
 
-		if ( isFunction( value ) ) {
+		if ( typeof value === "function" ) {
 			return this.each( function( j ) {
 				jQuery( this ).addClass( value.call( this, j, getClass( this ) ) );
 			} );
@@ -65,7 +61,7 @@ jQuery.fn.extend( {
 		var classes, elem, cur, curValue, clazz, j, finalValue,
 			i = 0;
 
-		if ( isFunction( value ) ) {
+		if ( typeof value === "function" ) {
 			return this.each( function( j ) {
 				jQuery( this ).removeClass( value.call( this, j, getClass( this ) ) );
 			} );
@@ -114,7 +110,7 @@ jQuery.fn.extend( {
 			return stateVal ? this.addClass( value ) : this.removeClass( value );
 		}
 
-		if ( isFunction( value ) ) {
+		if ( typeof value === "function" ) {
 			return this.each( function( i ) {
 				jQuery( this ).toggleClass(
 					value.call( this, i, getClass( this ), stateVal ),
@@ -159,8 +155,8 @@ jQuery.fn.extend( {
 				if ( this.setAttribute ) {
 					this.setAttribute( "class",
 						className || value === false ?
-						"" :
-						dataPriv.get( this, "__className__" ) || ""
+							"" :
+							dataPriv.get( this, "__className__" ) || ""
 					);
 				}
 			}
@@ -175,12 +171,10 @@ jQuery.fn.extend( {
 		while ( ( elem = this[ i++ ] ) ) {
 			if ( elem.nodeType === 1 &&
 				( " " + stripAndCollapse( getClass( elem ) ) + " " ).indexOf( className ) > -1 ) {
-					return true;
+				return true;
 			}
 		}
 
 		return false;
 	}
-} );
-
 } );

@@ -1,5 +1,7 @@
 /* eslint no-multi-str: "off" */
 
+"use strict";
+
 var FILEPATH = "/test/data/testinit.js",
 	activeScript = [].slice.call( document.getElementsByTagName( "script" ), -1 )[ 0 ],
 	parentUrl = activeScript && activeScript.src ?
@@ -43,45 +45,39 @@ this.q = function() {
 /**
  * Asserts that a select matches the given IDs
  * @param {String} message - Assertion name
- * @param {String} selector - Sizzle selector
+ * @param {String} selector - jQuery selector
  * @param {String} expectedIds - Array of ids to construct what is expected
  * @param {(String|Node)=document} context - Selector context
  * @example match("Check for something", "p", ["foo", "bar"]);
  */
-function match( message, selector, expectedIds, context ) {
-	var f = jQuery( selector, context ).get(),
-		s = "",
-		i = 0;
+function match( message, selector, expectedIds, context, assert ) {
+	var elems = jQuery( selector, context ).get();
 
-	for ( ; i < f.length; i++ ) {
-		s += ( s && "," ) + "\"" + f[ i ].id + "\"";
-	}
-
-	this.deepEqual( f, q.apply( q, expectedIds ), message + " (" + selector + ")" );
+	assert.deepEqual( elems, q.apply( q, expectedIds ), message + " (" + selector + ")" );
 }
 
 /**
  * Asserts that a select matches the given IDs.
  * The select is not bound by a context.
  * @param {String} message - Assertion name
- * @param {String} selector - Sizzle selector
+ * @param {String} selector - jQuery selector
  * @param {String} expectedIds - Array of ids to construct what is expected
  * @example t("Check for something", "p", ["foo", "bar"]);
  */
 QUnit.assert.t = function( message, selector, expectedIds ) {
-	match( message, selector, expectedIds, undefined );
+	match( message, selector, expectedIds, undefined, QUnit.assert );
 };
 
 /**
  * Asserts that a select matches the given IDs.
  * The select is performed within the `#qunit-fixture` context.
  * @param {String} message - Assertion name
- * @param {String} selector - Sizzle selector
+ * @param {String} selector - jQuery selector
  * @param {String} expectedIds - Array of ids to construct what is expected
  * @example selectInFixture("Check for something", "p", ["foo", "bar"]);
  */
 QUnit.assert.selectInFixture = function( message, selector, expectedIds ) {
-	match( message, selector, expectedIds, "#qunit-fixture" );
+	match( message, selector, expectedIds, "#qunit-fixture", QUnit.assert );
 };
 
 this.createDashboardXML = function() {
@@ -106,11 +102,11 @@ this.createWithFriesXML = function() {
 		xmlns:xsd='http://www.w3.org/2001/XMLSchema' \
 		xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'> \
 		<soap:Body> \
-			<jsconf xmlns='http://{{ externalHost }}/ns1'> \
-				<response xmlns:ab='http://{{ externalHost }}/ns2'> \
+			<jsconf xmlns='http://www.example.com/ns1'> \
+				<response xmlns:ab='http://www.example.com/ns2'> \
 					<meta> \
 						<component id='seite1' class='component'> \
-							<properties xmlns:cd='http://{{ externalHost }}/ns3'> \
+							<properties xmlns:cd='http://www.example.com/ns3'> \
 								<property name='prop1'> \
 									<thing /> \
 									<value>1</value> \
@@ -127,16 +123,12 @@ this.createWithFriesXML = function() {
 		</soap:Body> \
 	</soap:Envelope>";
 
-	return jQuery.parseXML( string.replace( /\{\{\s*externalHost\s*\}\}/g, externalHost ) );
+	return jQuery.parseXML( string );
 };
 
 this.createXMLFragment = function() {
-	var xml, frag;
-	if ( window.ActiveXObject ) {
-		xml = new window.ActiveXObject( "msxml2.domdocument" );
-	} else {
+	var frag,
 		xml = document.implementation.createDocument( "", "", null );
-	}
 
 	if ( xml ) {
 		frag = xml.createElement( "data" );
@@ -174,7 +166,8 @@ function url( value ) {
 
 // Ajax testing helper
 this.ajaxTest = function( title, expect, options ) {
-	QUnit.test( title, expect, function( assert ) {
+	QUnit.test( title, function( assert ) {
+		assert.expect( expect );
 		var requestOptions;
 
 		if ( typeof options === "function" ) {
@@ -250,7 +243,7 @@ this.testIframe = function( title, fileName, func, wrapper ) {
 	}
 	wrapper.call( QUnit, title, function( assert ) {
 		var done = assert.async(),
-			$iframe = supportjQuery( "<iframe/>" )
+			$iframe = supportjQuery( "<iframe></iframe>" )
 				.css( { position: "absolute", top: "0", left: "-600px", width: "500px" } )
 				.attr( { id: "qunit-fixture-iframe", src: url( fileName ) } );
 
@@ -261,12 +254,24 @@ this.testIframe = function( title, fileName, func, wrapper ) {
 			args.unshift( assert );
 
 			setTimeout( function() {
+				var result;
+
 				this.iframeCallback = undefined;
 
-				func.apply( this, args );
-				func = function() {};
-				$iframe.remove();
-				done();
+				result = func.apply( this, args );
+
+				function finish() {
+					func = function() {};
+					$iframe.remove();
+					done();
+				}
+
+				// Wait for promises returned by `func`.
+				if ( result && result.then ) {
+					result.then( finish );
+				} else {
+					finish();
+				}
 			} );
 		};
 
@@ -287,25 +292,36 @@ if ( !window.__karma__ ) {
 QUnit.isSwarm = ( QUnit.urlParams.swarmURL + "" ).indexOf( "http" ) === 0;
 QUnit.basicTests = ( QUnit.urlParams.module + "" ) === "basic";
 
-// Async test for module script type support
-function moduleTypeSupported() {
-	var script = document.createElement( "script" );
-	script.type = "module";
-	script.text = "QUnit.moduleTypeSupported = true";
-	document.head.appendChild( script ).parentNode.removeChild( script );
-}
-moduleTypeSupported();
+// Says whether jQuery positional selector extensions are supported.
+// A full selector engine is required to support them as they need to be evaluated
+// left-to-right. Remove that property when support for positional selectors is dropped.
+QUnit.jQuerySelectorsPos = true;
+
+// Says whether jQuery selector extensions are supported. Change that to `false`
+// if your custom jQuery versions relies more on native qSA.
+// This doesn't include support for positional selectors (see above).
+// TODO do we want to keep this or just assume support for jQuery extensions?
+QUnit.jQuerySelectors = true;
+
+// Support: IE 11+
+// A variable to make it easier to skip specific tests in IE, mostly
+// testing integrations with newer Web features not supported by it.
+QUnit.isIE = !!window.document.documentMode;
+QUnit.testUnlessIE = QUnit.isIE ? QUnit.skip : QUnit.test;
 
 this.loadTests = function() {
 
-	// Directly load tests that need synchronous evaluation
-	if ( !QUnit.urlParams.amd || document.readyState === "loading" ) {
+	// QUnit.config is populated from QUnit.urlParams but only at the beginning
+	// of the test run. We need to read both.
+	var esmodules = QUnit.config.esmodules || QUnit.urlParams.esmodules,
+		amd = QUnit.config.amd || QUnit.urlParams.amd;
+
+	// Directly load tests that need evaluation before DOMContentLoaded.
+	if ( ( !esmodules && !amd ) || document.readyState === "loading" ) {
 		document.write( "<script src='" + parentUrl + "test/unit/ready.js'><\x2Fscript>" );
 	} else {
 		QUnit.module( "ready", function() {
-			QUnit.test( "jQuery ready", function( assert ) {
-				assert.ok( false, "Test should be initialized before DOM ready" );
-			} );
+			QUnit.skip( "jQuery ready tests skipped in async mode", function() {} );
 		} );
 	}
 
@@ -313,10 +329,9 @@ this.loadTests = function() {
 	require( [ parentUrl + "test/data/testrunner.js" ], function() {
 		var i = 0,
 			tests = [
-				// A special module with basic tests, meant for
-				// not fully supported environments like Android 2.3,
-				// jsdom or PhantomJS. We run it everywhere, though,
-				// to make sure tests are not broken.
+				// A special module with basic tests, meant for not fully
+				// supported environments like jsdom. We run it everywhere,
+				// though, to make sure tests are not broken.
 				"unit/basic.js",
 
 				"unit/core.js",
@@ -350,7 +365,6 @@ this.loadTests = function() {
 				if ( !QUnit.basicTests || i === 1 ) {
 					require( [ parentUrl + "test/" + dep ], loadDep );
 
-				// Support: Android 2.3 only
 				// When running basic tests, replace other modules with dummies to avoid overloading
 				// impaired clients.
 				} else {
@@ -359,7 +373,11 @@ this.loadTests = function() {
 				}
 
 			} else {
-				QUnit.load();
+				if ( window.__karma__ && window.__karma__.start ) {
+					window.__karma__.start();
+				} else {
+					QUnit.load();
+				}
 
 				/**
 				 * Run in noConflict mode
